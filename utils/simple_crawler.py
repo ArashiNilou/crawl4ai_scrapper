@@ -1,4 +1,4 @@
-# simple_crawler.py - Version compatible avec Crawl4AI 0.4.247
+# simple_crawler.py - Version compatible avec Crawl4AI 0.6
 
 import asyncio
 import json
@@ -6,6 +6,7 @@ import time
 import re
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
+from crawl4ai import LLMConfig  # Import ajouté pour v0.6
 from dotenv import load_dotenv
 import os
 import csv
@@ -33,7 +34,7 @@ EXPOSANT_FIELDS = [
 async def simple_crawl_with_llm():
     """
     Version simplifiée qui utilise uniquement LLM pour l'extraction.
-    Compatible avec Crawl4AI 0.4.247
+    Compatible avec Crawl4AI 0.6
     """
     print("=== Crawler simplifié avec LLM ===")
     
@@ -46,10 +47,15 @@ async def simple_crawl_with_llm():
         viewport_height=1080,
     )
     
-    # Configuration LLM
-    llm_strategy = LLMExtractionStrategy(
+    # Configuration LLM pour v0.6
+    llm_config = LLMConfig(
         provider="groq/deepseek-r1-distill-llama-70b",
         api_token=os.getenv("GROQ_API_KEY"),
+    )
+    
+    # Configuration LLM
+    llm_strategy = LLMExtractionStrategy(
+        llm_config=llm_config,  # Utiliser llm_config au lieu de provider et api_token
         schema={
             "type": "object",
             "properties": {

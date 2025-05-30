@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from crawl4ai import AsyncWebCrawler
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode  # Import ajouté pour v0.6
 from dotenv import load_dotenv
 
 from config import BASE_URL, REQUIRED_KEYS
@@ -140,7 +140,7 @@ def combine_results(css_results: list, llm_results: list, seen_names: set) -> li
 async def test_scroll_only():
     """
     Fonction de test pour vérifier l'accès au site.
-    Version simplifiée pour Crawl4AI 0.4.247
+    Version simplifiée pour Crawl4AI 0.6
     """
     print("=== TEST: Accès au site et analyse du contenu ===")
     
@@ -175,36 +175,4 @@ async def test_scroll_only():
                 "Éléments avec 'company'": len(re.findall(r'class="[^"]*company[^"]*"', html_content, re.IGNORECASE)),
                 "Éléments avec 'card'": len(re.findall(r'class="[^"]*card[^"]*"', html_content, re.IGNORECASE)),
                 "Éléments avec 'exposant'": len(re.findall(r'class="[^"]*exposant[^"]*"', html_content, re.IGNORECASE)),
-                "Attributs data-*": len(re.findall(r'data-[^=]+="[^"]*"', html_content)),
-            }
-            
-            print("\n📊 Analyse de la structure HTML:")
-            for element, count in analysis.items():
-                if count > 0:
-                    print(f"  - {element}: {count}")
-            
-            # Suggestions de sélecteurs
-            print("\n💡 Suggestions pour améliorer les sélecteurs CSS:")
-            print("1. Inspectez 'debug_page.html' dans un navigateur")
-            print("2. Recherchez les patterns récurrents autour des noms d'entreprises")
-            print("3. Mettez à jour CSS_SELECTORS dans config.py")
-            
-        else:
-            print(f"❌ Échec de l'accès au site: {result.error_message if result else 'Pas de réponse'}")
-            print("Vérifiez l'URL dans config.py")
-
-
-async def main():
-    """
-    Point d'entrée principal.
-    """
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "test":
-        await test_scroll_only()
-    else:
-        await crawl_exposants_infinite_scroll()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+                "Attributs data-*": len(re.findall(r'data-[^=]+="[

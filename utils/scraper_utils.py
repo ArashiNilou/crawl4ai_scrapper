@@ -9,6 +9,7 @@ from crawl4ai import (
     CacheMode,
     CrawlerRunConfig,
     LLMExtractionStrategy,
+    LLMConfig,  # Import ajouté pour v0.6
 )
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 
@@ -93,10 +94,16 @@ def get_css_extraction_strategy() -> JsonCssExtractionStrategy:
 def get_llm_strategy() -> LLMExtractionStrategy:
     """
     Configuration LLM comme fallback ou alternative.
+    Syntaxe mise à jour pour Crawl4AI 0.6
     """
-    return LLMExtractionStrategy(
+    # Configuration LLM pour v0.6
+    llm_config = LLMConfig(
         provider="groq/deepseek-r1-distill-llama-70b",
         api_token=os.getenv("GROQ_API_KEY"),
+    )
+    
+    return LLMExtractionStrategy(
+        llm_config=llm_config,  # Utiliser llm_config au lieu de provider et api_token
         schema=exposant.model_json_schema(),
         extraction_type="schema",
         instruction=(
@@ -116,7 +123,7 @@ async def scroll_and_load_content(
 ) -> str:
     """
     Scroll la page pour charger tout le contenu dynamique.
-    Compatible avec Crawl4AI 0.4.247
+    Compatible avec Crawl4AI 0.6
     
     Returns:
         str: Le HTML complet après tous les scrolls
@@ -245,7 +252,7 @@ async def get_total_exposants_count(
 ) -> int:
     """
     Tente de récupérer le nombre total d'exposants affichés sur la page.
-    Version simplifiée pour Crawl4AI 0.4.247
+    Version pour Crawl4AI 0.6
     """
     result = await crawler.arun(
         url=url,
