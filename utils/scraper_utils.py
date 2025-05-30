@@ -1,5 +1,6 @@
 import json
 import os
+import asyncio
 from typing import List, Set, Tuple
 
 from crawl4ai import (
@@ -9,66 +10,120 @@ from crawl4ai import (
     CrawlerRunConfig,
     LLMExtractionStrategy,
 )
+from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 
 from models.exposant import exposant
 from utils.data_utils import is_complete_exposant, is_duplicate_exposant
+from config import CSS_SELECTORS, SCROLL_CONFIG
 
 
 def get_browser_config() -> BrowserConfig:
     """
     Returns the browser configuration for the crawler.
-
-    Returns:
-        BrowserConfig: The configuration settings for the browser.
     """
-    # https://docs.crawl4ai.com/core/browser-crawler-config/
     return BrowserConfig(
-        browser_type="chromium",  # Type of browser to simulate
-        headless=False,  # Whether to run in headless mode (no GUI)
-        verbose=True,  # Enable verbose logging
+        browser_type="chromium",
+        headless=False,  # Garder False pour voir le scroll en action
+        verbose=True,
+        viewport_width=1920,
+        viewport_height=1080,
     )
+
+
+def get_css_extraction_strategy() -> JsonCssExtractionStrategy:
+    """
+    Configuration pour extraire les données via CSS au lieu de LLM.
+    Plus rapide et plus précis pour des structures HTML fixes.
+    """
+    schema = {
+        "name": "exposants",
+        "baseSelector": "div[data-exposant]",  # Ajustez selon votre HTML
+        "fields": [
+            {
+                "name": "nom_entreprise",
+                "selector": "h2, h3, .company-name",  # Ajustez selon votre structure
+                "type": "text"
+            },
+            {
+                "name": "secteur_activite", 
+                "selector": CSS_SELECTORS["secteur"],
+                "type": "text"
+            },
+            {
+                "name": "pays",
+                "selector": CSS_SELECTORS["pays"],
+                "type": "text"
+            },
+            {
+                "name": "ville",
+                "selector": CSS_SELECTORS["ville"], 
+                "type": "text"
+            },
+            {
+                "name": "emplacement",
+                "selector": CSS_SELECTORS["emplacement"],
+                "type": "text"
+            },
+            {
+                "name": "jours_presences",
+                "selector": CSS_SELECTORS["jours"],
+                "type": "text"
+            },
+            {
+                "name": "startup",
+                "selector": CSS_SELECTORS["startup"],
+                "type": "text"
+            },
+            {
+                "name": "description",
+                "selector": CSS_SELECTORS["description"],
+                "type": "text"
+            },
+            {
+                "name": "tags",
+                "selector": CSS_SELECTORS["sous_secteur"],
+                "type": "text"
+            }
+        ]
+    }
+    
+    return JsonCssExtractionStrategy(schema)
 
 
 def get_llm_strategy() -> LLMExtractionStrategy:
     """
-    Returns the configuration for the language model extraction strategy.
-
-    Returns:
-        LLMExtractionStrategy: The settings for how to extract data using LLM.
+    Configuration LLM comme fallback ou alternative.
     """
-    # https://docs.crawl4ai.com/api/strategies/#llmextractionstrategy
     return LLMExtractionStrategy(
-        provider="groq/deepseek-r1-distill-llama-70b",  # Name of the LLM provider
-        api_token=os.getenv("GROQ_API_KEY"),  # API token for authentication
-        schema=exposant.model_json_schema(),  # JSON schema of the data model
-        extraction_type="schema",  # Type of extraction to perform
+        provider="groq/deepseek-r1-distill-llama-70b",
+        api_token=os.getenv("GROQ_API_KEY"),
+        schema=exposant.model_json_schema(),
+        extraction_type="schema",
         instruction=(
-            "Extract all exposant objects with 'name', 'location', 'price', 'capacity', "
-            "'rating', 'reviews', and a 1 sentence description of the exposant from the "
-            "following content."
-        ),  # Instructions for the LLM
-        input_format="markdown",  # Format of the input content
-        verbose=True,  # Enable verbose logging
+            "Extraire tous les exposants avec leurs informations : nom d'entreprise, "
+            "secteur d'activité, pays, ville, emplacement, jours de présence, "
+            "statut startup, tags/sous-secteurs, et description."
+        ),
+        input_format="html",
+        verbose=True,
     )
 
 
-async def check_no_results(
+async def scroll_and_load_content(
     crawler: AsyncWebCrawler,
     url: str,
-    session_id: str,
-) -> bool:
+    session_id: str
+) -> str:
     """
-    Checks if the "No Results Found" message is present on the page.
-
-    Args:
-        crawler (AsyncWebCrawler): The web crawler instance.
-        url (str): The URL to check.
-        session_id (str): The session identifier.
-
+    Scroll la page pour charger tout le contenu dynamique.
+    Compatible avec Crawl4AI 0.4.247
+    
     Returns:
-        bool: True if "No Results Found" message is found, False otherwise.
+        str: Le HTML complet après tous les scrolls
     """
-    # Fetch the page without any CSS selector or extraction strategy
+    print("Démarrage du scroll pour charger le contenu...")
+    
+    # Première visite de la page pour initialiser
     result = await crawler.arun(
         url=url,
         config=CrawlerRunConfig(
@@ -76,102 +131,151 @@ async def check_no_results(
             session_id=session_id,
         ),
     )
-
-    if result.success:
-        if "No Results Found" in result.cleaned_html:
-            return True
-    else:
-        print(
-            f"Error fetching page for 'No Results Found' check: {result.error_message}"
+    
+    if not result.success:
+        print(f"Erreur lors de l'accès initial: {result.error_message}")
+        return ""
+    
+    # Simulation manuelle du scroll avec des requêtes multiples
+    print("Simulation du scroll avec attentes...")
+    
+    max_attempts = SCROLL_CONFIG["max_scrolls"]
+    pause_time = SCROLL_CONFIG["scroll_pause_time"]
+    
+    for attempt in range(max_attempts):
+        print(f"Tentative {attempt + 1}/{max_attempts}")
+        
+        # Pause pour laisser le temps au contenu de se charger
+        await asyncio.sleep(pause_time)
+        
+        # Nouvelle requête pour récupérer le contenu mis à jour
+        result = await crawler.arun(
+            url=url,
+            config=CrawlerRunConfig(
+                cache_mode=CacheMode.BYPASS,
+                session_id=session_id,
+            ),
         )
+        
+        if not result.success:
+            print(f"Erreur tentative {attempt + 1}: {result.error_message}")
+            continue
+            
+        # On garde le dernier résultat valide
+        if result.cleaned_html:
+            print(f"Contenu récupéré: {len(result.cleaned_html)} caractères")
+    
+    print("Simulation de scroll terminée.")
+    return result.cleaned_html if result.success else ""
 
-    return False
 
-
-async def fetch_and_process_page(
+async def extract_all_exposants(
     crawler: AsyncWebCrawler,
-    page_number: int,
-    base_url: str,
-    css_selector: str,
-    llm_strategy: LLMExtractionStrategy,
+    url: str,
     session_id: str,
+    extraction_strategy,
     required_keys: List[str],
     seen_names: Set[str],
-) -> Tuple[List[dict], bool]:
+) -> List[dict]:
     """
-    Fetches and processes a single page of exposant data.
-
-    Args:
-        crawler (AsyncWebCrawler): The web crawler instance.
-        page_number (int): The page number to fetch.
-        base_url (str): The base URL of the website.
-        css_selector (str): The CSS selector to target the content.
-        llm_strategy (LLMExtractionStrategy): The LLM extraction strategy.
-        session_id (str): The session identifier.
-        required_keys (List[str]): List of required keys in the exposant data.
-        seen_names (Set[str]): Set of exposant names that have already been seen.
-
-    Returns:
-        Tuple[List[dict], bool]:
-            - List[dict]: A list of processed exposants from the page.
-            - bool: A flag indicating if the "No Results Found" message was encountered.
+    Extrait tous les exposants après avoir scrollé pour charger le contenu.
     """
-    url = f"{base_url}?page={page_number}"
-    print(f"Loading page {page_number}...")
-
-    # Check if "No Results Found" message is present
-    no_results = await check_no_results(crawler, url, session_id)
-    if no_results:
-        return [], True  # No more results, signal to stop crawling
-
-    # Fetch page content with the extraction strategy
+    print("Extraction des exposants avec scroll infini...")
+    
+    # D'abord, scroll pour charger tout le contenu
+    await scroll_and_load_content(crawler, url, session_id)
+    
+    # Ensuite, extraire les données
     result = await crawler.arun(
         url=url,
         config=CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS,  # Do not use cached data
-            extraction_strategy=llm_strategy,  # Strategy for data extraction
-            css_selector=css_selector,  # Target specific content on the page
-            session_id=session_id,  # Unique session ID for the crawl
+            cache_mode=CacheMode.BYPASS,
+            extraction_strategy=extraction_strategy,
+            session_id=session_id,
         ),
     )
-
+    
     if not (result.success and result.extracted_content):
-        print(f"Error fetching page {page_number}: {result.error_message}")
-        return [], False
-
-    # Parse extracted content
-    extracted_data = json.loads(result.extracted_content)
-    if not extracted_data:
-        print(f"No exposants found on page {page_number}.")
-        return [], False
-
-    # After parsing extracted content
-    print("Extracted data:", extracted_data)
-
-    # Process exposants
+        print(f"Erreur lors de l'extraction: {result.error_message}")
+        return []
+    
+    # Parser le contenu extrait
+    try:
+        extracted_data = json.loads(result.extracted_content)
+        print(f"Données extraites brutes: {len(extracted_data)} éléments")
+    except json.JSONDecodeError as e:
+        print(f"Erreur de parsing JSON: {e}")
+        return []
+    
+    # Traiter les exposants
     complete_exposants = []
-    for exposant in extracted_data:
-        # Debugging: Print each exposant to understand its structure
-        print("Processing exposant:", exposant)
+    for exposant_data in extracted_data:
+        print(f"Traitement exposant: {exposant_data}")
+        
+        # Nettoyer les données
+        clean_exposant = {}
+        for key, value in exposant_data.items():
+            if value and str(value).strip():
+                clean_exposant[key] = str(value).strip()
+        
+        # Vérifier si l'exposant est complet
+        if not is_complete_exposant(clean_exposant, required_keys):
+            print(f"Exposant incomplet ignoré: {clean_exposant}")
+            continue
+        
+        # Vérifier les doublons
+        exposant_name = clean_exposant.get("nom_entreprise", "")
+        if is_duplicate_exposant(exposant_name, seen_names):
+            print(f"Doublon ignoré: {exposant_name}")
+            continue
+        
+        # Ajouter à la liste
+        seen_names.add(exposant_name)
+        complete_exposants.append(clean_exposant)
+        print(f"Exposant ajouté: {exposant_name}")
+    
+    print(f"Total exposants valides extraits: {len(complete_exposants)}")
+    return complete_exposants
 
-        # Ignore the 'error' key if it's False
-        if exposant.get("error") is False:
-            exposant.pop("error", None)  # Remove the 'error' key if it's False
 
-        if not is_complete_exposant(exposant, required_keys):
-            continue  # Skip incomplete exposants
-
-        if is_duplicate_exposant(exposant["name"], seen_names):
-            print(f"Duplicate exposant '{exposant['name']}' found. Skipping.")
-            continue  # Skip duplicate exposants
-
-        # Add exposant to the list
-        seen_names.add(exposant["name"])
-        complete_exposants.append(exposant)
-
-    if not complete_exposants:
-        print(f"No complete exposants found on page {page_number}.")
-        return [], False
-
-    print(f"Extracted {len(complete_exposants)} exposants from page {page_number}.")
-    return complete_exposants, False  # Continue crawling
+async def get_total_exposants_count(
+    crawler: AsyncWebCrawler,
+    url: str,
+    session_id: str
+) -> int:
+    """
+    Tente de récupérer le nombre total d'exposants affichés sur la page.
+    Version simplifiée pour Crawl4AI 0.4.247
+    """
+    result = await crawler.arun(
+        url=url,
+        config=CrawlerRunConfig(
+            cache_mode=CacheMode.BYPASS,
+            session_id=session_id,
+        ),
+    )
+    
+    if result.success and result.cleaned_html:
+        # Estimation basique du nombre d'éléments potentiels
+        import re
+        html = result.cleaned_html
+        
+        # Patterns pour détecter les cartes d'exposants
+        patterns = [
+            r'class="[^"]*company[^"]*"',
+            r'class="[^"]*card[^"]*"',
+            r'class="[^"]*exposant[^"]*"',
+            r'class="[^"]*enterprise[^"]*"',
+            r'data-[^=]*="[^"]*company[^"]*"'
+        ]
+        
+        max_count = 0
+        for pattern in patterns:
+            matches = len(re.findall(pattern, html, re.IGNORECASE))
+            if matches > max_count:
+                max_count = matches
+        
+        print(f"Estimation basée sur l'HTML: ~{max_count} éléments détectés")
+        return max_count
+    
+    return 0
