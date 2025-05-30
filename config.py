@@ -1,7 +1,7 @@
 # config.py
 
-BASE_URL = "https://www.theknot.com/marketplace/wedding-reception-venues-atlanta-ga"
-CSS_SELECTOR = "[class^='info-container']"
+BASE_URL = "https://vivatechnology.com/partners"
+CSS_SELECTOR = 'a.absolute'
 REQUIRED_KEYS = [
     "name",
     "price",

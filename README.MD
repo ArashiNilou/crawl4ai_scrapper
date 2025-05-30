@@ -1,12 +1,12 @@
 # Deep Seek Crawler
 
-This project is a web crawler built with Python that extracts venue data (wedding reception venues) from a website using asynchronous programming with Crawl4AI. It utilizes a language model-based extraction strategy and saves the collected data to a CSV file.
+This project is a web crawler built with Python that extracts exposant data (wedding reception exposants) from a website using asynchronous programming with Crawl4AI. It utilizes a language model-based extraction strategy and saves the collected data to a CSV file.
 
 ## Features
 
 - Asynchronous web crawling using [Crawl4AI](https://pypi.org/project/Crawl4AI/)
 - Data extraction powered by a language model (LLM)
-- CSV export of extracted venue information
+- CSV export of extracted exposant information
 - Modular and easy-to-follow code structure ideal for beginners
 
 ## Project Structure
@@ -15,7 +15,7 @@ This project is a web crawler built with Python that extracts venue data (weddin
 ├── main.py # Main entry point for the crawler
 ├── config.py # Contains configuration constants (Base URL, CSS selectors, etc.)
 ├── models
-│ └── venue.py # Defines the Venue data model using Pydantic
+│ └── exposant.py # Defines the exposant data model using Pydantic
 ├── utils
 │ ├── init.py # (Empty) Package marker for utils
 │ ├── data_utils.py # Utility functions for processing and saving data
@@ -58,15 +58,15 @@ To start the crawler, run:
 python main.py
 ```
 
-The script will crawl the specified website, extract data page by page, and save the complete venues to a `complete_venues.csv` file in the project directory. Additionally, usage statistics for the LLM strategy will be displayed after crawling.
+The script will crawl the specified website, extract data page by page, and save the complete exposants to a `complete_exposants.csv` file in the project directory. Additionally, usage statistics for the LLM strategy will be displayed after crawling.
 
 ## Configuration
 
 The `config.py` file contains key constants used throughout the project:
 
-- **BASE_URL**: The URL of the website from which to extract venue data.
-- **CSS_SELECTOR**: CSS selector string used to target venue content.
-- **REQUIRED_KEYS**: List of required fields to consider a venue complete.
+- **BASE_URL**: The URL of the website from which to extract exposant data.
+- **CSS_SELECTOR**: CSS selector string used to target exposant content.
+- **REQUIRED_KEYS**: List of required fields to consider a exposant complete.
 
 You can modify these values as needed.
 
